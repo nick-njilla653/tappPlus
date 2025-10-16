@@ -1,0 +1,29 @@
+FROM node:18-slim
+
+# Installer les dépendances système
+RUN apt-get update && apt-get install -y \
+    openssl \
+    ca-certificates \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Créer le répertoire de travail
+WORKDIR /app
+
+# Copier le code source
+COPY . .
+
+# Installer les dépendances
+RUN npm install
+
+# Générer le client Prisma
+RUN npx prisma generate
+
+# Build l'application
+RUN npm run build
+
+# Exposer le port
+EXPOSE 5550
+
+# Commande de démarrage
+CMD ["node", "dist/main.js"]

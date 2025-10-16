@@ -39,7 +39,8 @@ logs/
 .dockerignore
 
 # Prisma
-prisma/migrations/
+# Note: Ne pas ignorer les migrations en production!
+# prisma/migrations/
 
 # Test coverage
 coverage/
@@ -47,3 +48,18 @@ coverage/
 # Temporary files
 *.tmp
 *.temp
+
+# Production - Secrets et données sensibles
+nginx/ssl/*.pem
+nginx/ssl/*.key
+nginx/ssl/*.crt
+backups/*.sql
+backups/*.sql.gz
+
+# Production - Logs
+nginx/logs/
+*.log.*
+
+# Docker volumes data (si bind mount local)
+postgres_data/
+redis_data/

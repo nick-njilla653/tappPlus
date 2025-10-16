@@ -7,10 +7,14 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
   // Configuration CORS
+  const allowedOrigins = process.env.CORS_ORIGINS
+    ? process.env.CORS_ORIGINS.split(',').map(origin => origin.trim())
+    : process.env.NODE_ENV === 'production'
+      ? ['https://meditache.com']
+      : ['http://localhost:5500', 'http://localhost:5550'];
+
   app.enableCors({
-    origin: process.env.NODE_ENV === 'production' 
-      ? ['https://meditache.com'] 
-      : ['http://localhost:5500', 'http://localhost:5550'],
+    origin: allowedOrigins,
     credentials: true,
   });
 
@@ -38,10 +42,11 @@ async function bootstrap() {
   app.setGlobalPrefix('api/v1');
 
   const port = process.env.API_PORT || 5550;
-  await app.listen(port);
-  
+  const host = process.env.NODE_ENV === 'production' ? '0.0.0.0' : 'localhost';
+  await app.listen(port, host);
+
   console.log(`🚀 API Meditache démarrée sur le port ${port}`);
-  console.log(`📚 Documentation Swagger disponible sur http://localhost:${port}/api/docs`);
+  console.log(`📚 Documentation Swagger disponible sur http://${host}:${port}/api/docs`);
 }
 
 bootstrap();

@@ -1,0 +1,97 @@
+# ============================================
+# Stage 1: Dependencies
+# ============================================
+FROM node:18-slim AS deps
+
+RUN apt-get update && apt-get install -y \
+    openssl \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Copier les fichiers de dépendances
+COPY package*.json ./
+COPY apps/api/package*.json ./apps/api/
+
+# Installer toutes les dépendances (incluant dev pour le build)
+RUN npm ci
+
+# ============================================
+# Stage 2: Builder
+# ============================================
+FROM node:18-slim AS builder
+
+RUN apt-get update && apt-get install -y \
+    openssl \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Copier node_modules depuis deps
+COPY --from=deps /app/node_modules ./node_modules
+COPY --from=deps /app/apps/api/node_modules ./apps/api/node_modules
+
+# Copier le code source
+COPY package*.json ./
+COPY apps/api/ ./apps/api/
+
+# Se positionner dans le répertoire api
+WORKDIR /app/apps/api
+
+# Générer le client Prisma
+RUN npx prisma generate
+
+# Build l'application
+RUN npm run build
+
+# Vérifier que le build a réussi
+RUN ls -la dist/ && echo "Build successful!"
+
+# ============================================
+# Stage 3: Production Runner
+# ============================================
+FROM node:18-slim AS runner
+
+RUN apt-get update && apt-get install -y \
+    openssl \
+    ca-certificates \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Créer un utilisateur non-root
+RUN groupadd -r appuser && useradd -r -g appuser appuser
+
+WORKDIR /app
+
+ENV NODE_ENV=production
+
+# Copier package.json
+COPY --from=builder /app/package*.json ./
+COPY --from=builder /app/apps/api/package*.json ./
+
+# Installer uniquement les dépendances de production
+RUN npm ci --only=production && npm cache clean --force
+
+# Copier les fichiers buildés
+COPY --from=builder /app/apps/api/dist ./dist
+COPY --from=builder /app/apps/api/prisma ./prisma
+
+# Copier le client Prisma généré
+COPY --from=builder /app/apps/api/node_modules/.prisma ./node_modules/.prisma
+COPY --from=builder /app/apps/api/node_modules/@prisma ./node_modules/@prisma
+
+# Changer ownership
+RUN chown -R appuser:appuser /app
+
+USER appuser
+
+EXPOSE 5550
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+    CMD curl -f http://localhost:5550/api/v1/health || exit 1
+
+# Commande par défaut pour l'API
+CMD ["node", "dist/main.js"]

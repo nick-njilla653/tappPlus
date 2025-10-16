@@ -1,0 +1,80 @@
+# ============================================
+# Stage 1: Dependencies
+# ============================================
+FROM node:18-alpine AS deps
+
+RUN apk add --no-cache libc6-compat
+
+WORKDIR /app
+
+# Copier les fichiers de dépendances
+COPY package*.json ./
+COPY apps/web/package*.json ./apps/web/
+
+# Installer les dépendances
+RUN npm ci
+
+# ============================================
+# Stage 2: Builder
+# ============================================
+FROM node:18-alpine AS builder
+
+RUN apk add --no-cache libc6-compat
+
+WORKDIR /app
+
+# Copier node_modules depuis deps
+COPY --from=deps /app/node_modules ./node_modules
+COPY --from=deps /app/apps/web/node_modules ./apps/web/node_modules
+
+# Copier le code source
+COPY package*.json ./
+COPY apps/web/ ./apps/web/
+
+WORKDIR /app/apps/web
+
+# Build l'application Next.js
+# Les variables NEXT_PUBLIC_* doivent être définies au moment du build
+ARG NEXT_PUBLIC_API_URL
+ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
+
+RUN npm run build
+
+# ============================================
+# Stage 3: Production Runner
+# ============================================
+FROM node:18-alpine AS runner
+
+RUN apk add --no-cache curl
+
+WORKDIR /app
+
+ENV NODE_ENV=production
+
+# Créer un utilisateur non-root
+RUN addgroup --system --gid 1001 nodejs
+RUN adduser --system --uid 1001 nextjs
+
+# Copier les fichiers publics
+COPY --from=builder /app/apps/web/public ./public
+
+# Créer le répertoire .next avec les bonnes permissions
+RUN mkdir .next
+RUN chown nextjs:nodejs .next
+
+# Copier les fichiers buildés standalone
+COPY --from=builder --chown=nextjs:nodejs /app/apps/web/.next/standalone ./
+COPY --from=builder --chown=nextjs:nodejs /app/apps/web/.next/static ./.next/static
+
+USER nextjs
+
+EXPOSE 5500
+
+ENV PORT=5500
+ENV HOSTNAME="0.0.0.0"
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+    CMD curl -f http://localhost:5500 || exit 1
+
+CMD ["node", "server.js"]

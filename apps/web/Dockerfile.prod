@@ -11,7 +11,7 @@ WORKDIR /app
 COPY apps/web/package*.json ./
 
 # Installer les dépendances
-RUN npm ci
+RUN npm install
 
 # ============================================
 # Stage 2: Builder

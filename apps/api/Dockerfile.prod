@@ -15,7 +15,7 @@ COPY apps/api/package*.json ./
 COPY apps/api/prisma ./prisma
 
 # Installer toutes les dépendances (incluant dev pour le build)
-RUN npm ci
+RUN npm install
 
 # ============================================
 # Stage 2: Builder
@@ -67,7 +67,7 @@ ENV NODE_ENV=production
 COPY --from=builder /app/package*.json ./
 
 # Installer uniquement les dépendances de production
-RUN npm ci --only=production && npm cache clean --force
+RUN npm install --only=production && npm cache clean --force
 
 # Copier les fichiers buildés
 COPY --from=builder /app/dist ./dist

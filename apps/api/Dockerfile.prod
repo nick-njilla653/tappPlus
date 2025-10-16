@@ -10,9 +10,9 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /app
 
-# Copier les fichiers de dépendances
-COPY package*.json ./
-COPY apps/api/package*.json ./apps/api/
+# Copier seulement les fichiers nécessaires pour l'API
+COPY apps/api/package*.json ./
+COPY apps/api/prisma ./prisma
 
 # Installer toutes les dépendances (incluant dev pour le build)
 RUN npm ci
@@ -31,14 +31,10 @@ WORKDIR /app
 
 # Copier node_modules depuis deps
 COPY --from=deps /app/node_modules ./node_modules
-COPY --from=deps /app/apps/api/node_modules ./apps/api/node_modules
+COPY --from=deps /app/prisma ./prisma
 
-# Copier le code source
-COPY package*.json ./
-COPY apps/api/ ./apps/api/
-
-# Se positionner dans le répertoire api
-WORKDIR /app/apps/api
+# Copier le code source de l'API
+COPY apps/api/ ./
 
 # Générer le client Prisma
 RUN npx prisma generate
@@ -69,18 +65,17 @@ ENV NODE_ENV=production
 
 # Copier package.json
 COPY --from=builder /app/package*.json ./
-COPY --from=builder /app/apps/api/package*.json ./
 
 # Installer uniquement les dépendances de production
 RUN npm ci --only=production && npm cache clean --force
 
 # Copier les fichiers buildés
-COPY --from=builder /app/apps/api/dist ./dist
-COPY --from=builder /app/apps/api/prisma ./prisma
+COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/prisma ./prisma
 
 # Copier le client Prisma généré
-COPY --from=builder /app/apps/api/node_modules/.prisma ./node_modules/.prisma
-COPY --from=builder /app/apps/api/node_modules/@prisma ./node_modules/@prisma
+COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
+COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
 
 # Changer ownership
 RUN chown -R appuser:appuser /app
